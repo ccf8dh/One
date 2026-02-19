@@ -1,0 +1,8 @@
+---
+services:
+  authelia-backend:
+    volumes:
+      - './TwoFactor/configuration.yml:/config/configuration.yml'
+      - './TwoFactor/users.yml:/config/users.yml'
+      - './common/pki:/pki'
+...

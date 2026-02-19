@@ -1,0 +1,7 @@
+---
+services:
+  authelia-backend:
+    volumes:
+      - './HighAvailability/configuration.yml:/config/configuration.yml'
+      - './common/pki:/pki'
+...
