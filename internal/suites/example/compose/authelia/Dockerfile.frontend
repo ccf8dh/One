@@ -1,0 +1,13 @@
+FROM node:22-alpine@sha256:c9bb43423a6229aeddf3d16ae6aaa0ff71a0b2951ce18ec8fedb6f5d766cf286
+
+ARG USER_ID
+ARG GROUP_ID
+
+RUN yarn global add pnpm && \
+    deluser node && \
+    addgroup --gid ${GROUP_ID} dev && \
+    adduser --uid ${USER_ID} -G dev -D dev
+
+USER dev
+
+EXPOSE 3000
