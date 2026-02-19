@@ -1,0 +1,19 @@
+FROM golang:1.23.3-alpine@sha256:09742590377387b931261cbeb72ce56da1b0d750a27379f7385245b2b058b63a
+
+ARG USER_ID
+ARG GROUP_ID
+
+RUN addgroup --gid ${GROUP_ID} dev && \
+    adduser --uid ${USER_ID} -G dev -D dev && \
+    apk --no-cache add gcc git musl-dev
+
+RUN mkdir -p /config && chown dev:dev /config
+
+USER dev
+
+ENV PATH="/app:${PATH}" \
+	X_AUTHELIA_CONFIG="/config/configuration.yml"
+
+VOLUME /config
+
+EXPOSE 9091
