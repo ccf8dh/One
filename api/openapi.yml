@@ -1,0 +1,1282 @@
+---
+openapi: 3.0.0
+info:
+  title: Authelia API
+  description: >
+    Authelia is an open-source authentication and authorization server providing 2-factor authentication and single
+    sign-on (SSO) for your applications via a web portal.
+  contact:
+    name: Authelia Support
+    url: https://github.com/authelia/authelia#contact-options
+    email: team@authelia.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  version: 1.0.0
+tags:
+  - name: State
+    description: Configuration, health and state endpoints
+  - name: Authentication
+    description: Authentication and verification endpoints
+  - name: Password Reset
+    description: Password reset endpoints
+  - name: User Information
+    description: User configuration endpoints
+  - name: Second Factor
+    description: TOTP, Webauthn and Duo endpoints
+paths:
+  /api/configuration:
+    get:
+      tags:
+        - State
+      summary: Application Configuration
+      description: >
+        The configuration endpoint provides detailed information including available second factor methods, if any
+        second factor policies exist and the TOTP period configuration.
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.configuration.ConfigurationBody'
+        "403":
+          description: Forbidden
+      security:
+        - authelia_auth: []
+  /api/configuration/password-policy:
+    get:
+      tags:
+        - State
+      summary: Password Policy Configuration
+      description: >
+        The password policy configuration endpoint provides a password policy for resetting passwords.
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.configuration.PasswordPolicyConfigurationBody'
+  /api/health:
+    get:
+      tags:
+        - State
+      summary: Application Health
+      description: The health check endpoint provides information about the health of Authelia.
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.OkResponse'
+  /api/state:
+    get:
+      tags:
+        - State
+      summary: User Application State
+      description: >
+        The state endpoint provides detailed information including the user, current authenticate level and Authelia's
+        configured default redirection URL.
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.StateResponse'
+  /api/verify:
+    get:
+      tags:
+        - Authentication
+      summary: Verification
+      description: >
+        The verify endpoint provides the ability to verify if a user has the necessary permissions to access a specified
+        domain.
+      parameters:
+        - $ref: '#/components/parameters/originalURLParam'
+        - $ref: '#/components/parameters/forwardedMethodParam'
+        - $ref: '#/components/parameters/authParam'
+      responses:
+        "200":
+          description: Successful Operation
+          headers:
+            remote-user:
+              description: Username
+              schema:
+                type: string
+                example: john
+            remote-name:
+              description: Name
+              schema:
+                type: string
+                example: John Doe
+            remote-email:
+              description: Email
+              schema:
+                type: string
+                example: john.doe@authelia.com
+            remote-groups:
+              description: Comma separated list of Groups
+              schema:
+                type: string
+                example: admin,devs
+        "401":
+          description: Unauthorized
+      security:
+        - authelia_auth: []
+    head:
+      tags:
+        - Authentication
+      summary: Verification
+      description: >
+        The verify endpoint provides the ability to verify if a user has the necessary permissions to access a specified
+        domain.
+      parameters:
+        - $ref: '#/components/parameters/originalURLParam'
+        - $ref: '#/components/parameters/forwardedMethodParam'
+        - $ref: '#/components/parameters/authParam'
+      responses:
+        "200":
+          description: Successful Operation
+          headers:
+            remote-user:
+              description: Username
+              schema:
+                type: string
+                example: john
+            remote-name:
+              description: Name
+              schema:
+                type: string
+                example: John Doe
+            remote-email:
+              description: Email
+              schema:
+                type: string
+                example: john.doe@authelia.com
+            remote-groups:
+              description: Comma separated list of Groups
+              schema:
+                type: string
+                example: admin,devs
+        "401":
+          description: Unauthorized
+      security:
+        - authelia_auth: []
+  /api/firstfactor:
+    post:
+      tags:
+        - Authentication
+      summary: Login
+      description: >
+        The firstfactor endpoint allows a user to login and generates an authentication cookie for authorization.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/handlers.firstFactorRequestBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.redirectResponse'
+        "401":
+          description: Unauthorized
+      security:
+        - authelia_auth: []
+  /api/checks/safe-redirection:
+    post:
+      tags:
+        - Authentication
+      summary: Check whether URI is safe to redirect to.
+      description: >
+        End users usually needs to be redirected to a target website after authentication. This endpoint aims to check
+        if target URL is safe to redirect to. This prevents open redirect attacks.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/handlers.checkURIWithinDomainRequestBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.checkURIWithinDomainResponseBody'
+        "401":
+          description: Unauthorized
+      security:
+        - authelia_auth: []
+  /api/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout
+      description: The logout endpoint allows a user to logout and destroy a sesssion.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/handlers.logoutRequestBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.logoutResponseBody'
+      security:
+        - authelia_auth: []
+  /api/reset-password/identity/start:
+    post:
+      tags:
+        - Password Reset
+      summary: Identity Verification Token Creation
+      description: >
+        This endpoint is step 1 of 3 in the password reset process.
+
+        It validates the user session and sends the user an email with a token and a link to reset their password. This
+        step also generates a session cookie for the rest of the process.
+
+        The same session cookie must be used for all steps in this process.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/handlers.resetPasswordStep1RequestBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.OkResponse'
+      security:
+        - authelia_auth: []
+  /api/reset-password/identity/finish:
+    post:
+      tags:
+        - Password Reset
+      summary: Identity Verification Token Validation
+      description: >
+        This endpoint is step 2 of 3 in the password reset process.
+
+        It validates the user session and reset token.
+
+        The same session cookie must be used for all steps in this process.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/middlewares.IdentityVerificationFinishBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.OkResponse'
+      security:
+        - authelia_auth: []
+  /api/reset-password:
+    post:
+      tags:
+        - Password Reset
+      summary: Password Reset
+      description: >
+        This endpoint is step 3 of 3 in the password reset process.
+
+        It validates the user session and changes the password.
+
+        The same session cookie must be used for all steps in this process.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/handlers.resetPasswordStep2RequestBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.OkResponse'
+      security:
+        - authelia_auth: []
+  /api/user/info:
+    get:
+      tags:
+        - User Information
+      summary: User Configuration
+      description: >
+        The user info endpoint provides detailed information including a users display name, preferred and registered
+        second factor method(s).
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.UserInfo'
+        "403":
+          description: Forbidden
+      security:
+        - authelia_auth: []
+    post:
+      tags:
+        - User Information
+      summary: User Configuration
+      description: >
+        The user info endpoint provides detailed information including a users display name, preferred and registered
+        second factor method(s). The POST method also ensures the preferred method is configured correctly.
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.UserInfo'
+        "403":
+          description: Forbidden
+      security:
+        - authelia_auth: []
+  /api/user/info/totp:
+    get:
+      tags:
+        - User Information
+      summary: User TOTP Configuration
+      description: >
+        The user TOTP info endpoint provides information necessary to display the TOTP component to validate their
+        TOTP input such as the period/frequency and number of digits.
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.UserInfoTOTP'
+        "403":
+          description: Forbidden
+      security:
+        - authelia_auth: []
+  /api/user/info/2fa_method:
+    post:
+      tags:
+        - User Information
+      summary: User Configuration
+      description: The user info 2fa_method endpoint sets the users preferred second factor method.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/handlers.UserInfo.MethodBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.OkResponse'
+        "403":
+          description: Forbidden
+      security:
+        - authelia_auth: []
+  /api/secondfactor/totp/identity/start:
+    post:
+      tags:
+        - Second Factor
+      summary: Identity Verification TOTP Token Creation
+      description: >
+        This endpoint performs identity verification to begin the TOTP device registration process.
+
+        The session generated from this endpoint must be utilised for the subsequent step in the
+        `/api/secondfactor/totp/identity/finish` endpoint.
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.OkResponse'
+      security:
+        - authelia_auth: []
+  /api/secondfactor/totp/identity/finish:
+    post:
+      tags:
+        - Second Factor
+      summary: Identity Verification TOTP Token Validation and Device Creation
+      description: >
+        This endpoint performs identity and token verification, upon success also generates TOTP device secret and
+        registers said device.
+
+        The session cookie generated from the `/api/secondfactor/totp/identity/start` endpoint must be utilised for the
+        step here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/middlewares.IdentityVerificationFinishBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.TOTPKeyResponse'
+      security:
+        - authelia_auth: []
+  /api/secondfactor/totp:
+    post:
+      tags:
+        - Second Factor
+      summary: Second Factor Authentication - TOTP
+      description: This endpoint performs second factor authentication with a TOTP key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/handlers.signTOTPRequestBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.redirectResponse'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.ErrorResponse'
+      security:
+        - authelia_auth: []
+  /api/secondfactor/webauthn/assertion:
+    get:
+      tags:
+        - Second Factor
+      summary: Second Factor Authentication - Webauthn (Request)
+      description: This endpoint starts the second factor authentication process with the FIDO2 Webauthn credential.
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/webauthn.PublicKeyCredentialRequestOptions'
+        "401":
+          description: Unauthorized
+      security:
+        - authelia_auth: []
+    post:
+      tags:
+        - Second Factor
+      summary: Second Factor Authentication - Webauthn
+      description: This endpoint completes the second factor authentication process with the FIDO2 Webauthn credential.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/webauthn.CredentialAssertionResponse"
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.redirectResponse'
+        "401":
+          description: Unauthorized
+      security:
+        - authelia_auth: []
+  /api/secondfactor/webauthn/identity/start:
+    post:
+      tags:
+        - Second Factor
+      summary: Identity Verification Webauthn Credential Creation
+      description: >
+        This endpoint performs identity verification to begin the FIDO2 Webauthn credential attestation process
+        (registration).
+
+        The session generated from this endpoint must be utilised for the subsequent steps in the
+        `/api/secondfactor/webauthn/identity/finish` and `/api/secondfactor/webauthn/attestation` endpoints.
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.OkResponse'
+      security:
+        - authelia_auth: []
+  /api/secondfactor/webauthn/identity/finish:
+    post:
+      tags:
+        - Second Factor
+      summary: Identity Verification FIDO2 Webauthn Credential Validation
+      description: >
+        This endpoint performs identity and token verification, upon success generates a FIDO2 Webauthn device
+        attestation challenge (registration).
+
+        The session cookie generated from the `/api/secondfactor/webauthn/identity/start` endpoint must be utilised
+        for the subsequent steps here and in the `/api/secondfactor/webauthn/attestation` endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/middlewares.IdentityVerificationFinishBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/webauthn.PublicKeyCredentialCreationOptions'
+      security:
+        - authelia_auth: []
+  /api/secondfactor/webauthn/attestation:
+    post:
+      tags:
+        - Second Factor
+      summary: Webauthn Credential Attestation
+      description: This endpoint performs Webauthn credential attestation (registration).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/webauthn.CredentialAttestationResponse'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.OkResponse'
+      security:
+        - authelia_auth: []
+  /api/secondfactor/duo:
+    post:
+      tags:
+        - Second Factor
+      summary: Second Factor Authentication - Duo Mobile Push
+      description: This endpoint performs second factor authentication with a Duo Mobile Push.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/handlers.signDuoRequestBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.redirectResponse'
+        "401":
+          description: Unauthorized
+      security:
+        - authelia_auth: []
+  /api/secondfactor/duo_devices:
+    get:
+      tags:
+        - Second Factor
+      summary: Second Factor Authentication - Duo Mobile Push
+      description: This endpoint retreives a users available devices and capabilities from Duo.
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/handlers.DuoDevicesResponse'
+        "401":
+          description: Unauthorized
+      security:
+        - authelia_auth: []
+  /api/secondfactor/duo_device:
+    post:
+      tags:
+        - Second Factor
+      summary: Second Factor Authentication - Duo Mobile Push
+      description: This endpoint updates the users preferred Duo device and method.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/handlers.DuoDeviceBody'
+      responses:
+        "200":
+          description: Successful Operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/middlewares.OkResponse'
+        "401":
+          description: Unauthorized
+      security:
+        - authelia_auth: []
+components:
+  parameters:
+    originalURLParam:
+      name: X-Original-URL
+      in: header
+      description: Redirection URL
+      required: true
+      style: simple
+      explode: true
+      schema:
+        type: string
+    forwardedMethodParam:
+      name: X-Forwarded-Method
+      in: header
+      description: Request Method
+      required: false
+      style: simple
+      explode: true
+      schema:
+        type: string
+        enum:
+          - "GET"
+          - "HEAD"
+          - "POST"
+          - "PUT"
+          - "PATCH"
+          - "DELETE"
+          - "TRACE"
+          - "CONNECT"
+          - "OPTIONS"
+          - "COPY"
+          - "LOCK"
+          - "MKCOL"
+          - "MOVE"
+          - "PROPFIND"
+          - "PROPPATCH"
+          - "UNLOCK"
+    authParam:
+      name: auth
+      in: query
+      description: Switch authorization header and prompt for basic auth
+      required: false
+      schema:
+        type: string
+        enum: ["basic"]
+  schemas:
+    handlers.checkURIWithinDomainRequestBody:
+      type: object
+      properties:
+        uri:
+          type: string
+          example: https://secure.example.com
+    handlers.checkURIWithinDomainResponseBody:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+          description: If redirection URL is safe.
+    handlers.configuration.ConfigurationBody:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+          properties:
+            available_methods:
+              type: array
+              description: List of available 2FA methods. If no methods exist 2FA is disabled.
+              items:
+                enum:
+                  - "totp"
+                  - "webauthn"
+                  - "mobile_push"
+              example: [totp, webauthn, mobile_push]
+    handlers.configuration.PasswordPolicyConfigurationBody:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+          properties:
+            mode:
+              type: string
+              description: The password policy mode.
+              enum:
+                - "disabled"
+                - "standard"
+                - "zxcvbn"
+            min_length:
+              type: integer
+              description: The minimum password length when using the standard mode.
+            max_length:
+              type: integer
+              description: The maximum password length when using the standard mode.
+            min_score:
+              type: integer
+              description: The minimum password score when using the zxcvbn mode.
+            require_uppercase:
+              type: boolean
+              description: If uppercase characters are required when using the standard mode.
+            require_lowercase:
+              type: boolean
+              description: If uppercase characters are required when using the standard mode.
+            require_number:
+              type: boolean
+              description: If numeric characters are required when using the standard mode.
+            require_special:
+              type: boolean
+              description: If special characters are required when using the standard mode.
+    handlers.DuoDeviceBody:
+      required:
+        - device
+        - method
+      type: object
+      properties:
+        device:
+          type: string
+          example: ABCDE123456789FGHIJK
+        method:
+          type: string
+          example: push
+    handlers.DuoDevicesResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+          properties:
+            result:
+              type: string
+              example: auth
+            devices:
+              type: array
+              items:
+                type: object
+                properties:
+                  device:
+                    type: string
+                    example: ABCDE123456789FGHIJK
+                  display_name:
+                    type: string
+                    example: iOS (+XX XXX XXX 123)
+                  capabilities:
+                    type: array
+                    items:
+                      type: string
+                      example: push
+    handlers.firstFactorRequestBody:
+      required:
+        - username
+        - password
+      type: object
+      properties:
+        username:
+          type: string
+          example: john
+        password:
+          type: string
+          example: password
+        targetURL:
+          type: string
+          example: https://home.example.com
+        requestMethod:
+          type: string
+          example: GET
+        keepMeLoggedIn:
+          type: boolean
+          example: true
+    handlers.logoutRequestBody:
+      type: object
+      properties:
+        targetURL:
+          type: string
+          example: https://redirect.example.com
+    handlers.logoutResponseBody:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+          properties:
+            safeTargetURL:
+              type: boolean
+              example: true
+    handlers.redirectResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+          properties:
+            redirect:
+              type: string
+              example: https://home.example.com
+    handlers.resetPasswordStep1RequestBody:
+      required:
+        - username
+      type: object
+      properties:
+        username:
+          type: string
+          example: john
+    handlers.resetPasswordStep2RequestBody:
+      required:
+        - password
+      type: object
+      properties:
+        password:
+          type: string
+          example: password
+    handlers.signDuoRequestBody:
+      type: object
+      properties:
+        targetURL:
+          type: string
+          example: https://secure.example.com
+    handlers.signTOTPRequestBody:
+      type: object
+      properties:
+        token:
+          type: string
+          example: "123456"
+        targetURL:
+          type: string
+          example: https://secure.example.com
+    handlers.StateResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+          properties:
+            username:
+              type: string
+              example: john
+            authentication_level:
+              type: integer
+              example: 1
+            default_redirection_url:
+              type: string
+              example: https://home.example.com
+    handlers.TOTPKeyResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+          properties:
+            base32_secret:
+              type: string
+              example: 5ZH7Y5CTFWOXN7EOLGBMMXADRNQFHVUDZSYKCN5HMFAIRSLAWY3Q
+            otpauth_url:
+              type: string
+              example: otpauth://totp/auth.example.com:john?algorithm=SHA1&digits=6&issuer=auth.example.com&period=30&secret=5ZH7Y5CTFWOXN7EOLGBMMXADRNQFHVUDZSYKCN5HMFAIRSLAWY3Q  # yamllint disable-line rule:line-length
+    handlers.UserInfo:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+          properties:
+            display_name:
+              type: string
+              example: John Doe
+            method:
+              type: string
+              enum:
+                - "totp"
+                - "webauthn"
+                - "mobile_push"
+              example: totp
+            has_webauthn:
+              type: boolean
+              example: false
+            has_totp:
+              type: boolean
+              example: true
+            has_duo:
+              type: boolean
+              example: true
+    handlers.UserInfoTOTP:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+          properties:
+            period:
+              default: 30
+              description: The period defined in the users TOTP configuration
+              type: integer
+              example: 30
+            digits:
+              default: 6
+              description: The number of digits defined in the users TOTP configuration
+              type: integer
+              example: 6
+    handlers.UserInfo.MethodBody:
+      required:
+        - method
+      type: object
+      properties:
+        method:
+          type: string
+          enum:
+            - "totp"
+            - "webauthn"
+            - "mobile_push"
+          example: totp
+    middlewares.ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: KO
+        message:
+          type: string
+          example: Authentication failed, please retry later.
+    middlewares.IdentityVerificationFinishBody:
+      required:
+        - token
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2MDc5MjU1OTYsImlzcyI6IkF1dGhlbGlhIiwiYWN0aW9uIjoiUmVzZXRQYXNzd29yZCIsInVzZXJuYW1lIjoiQW1pciJ9.636yqRrUCGCe4jsMCsonleX5CYWHncYqZum-YYb6VaY  # yamllint disable-line rule:line-length
+    middlewares.OkResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+    webauthn.PublicKeyCredential:
+      type: object
+      properties:
+        rawId:
+          type: string
+          format: byte
+        id:
+          type: string
+        type:
+          type: string
+    webauthn.AuthenticatorResponse:
+      type: object
+      properties:
+        clientDataJSON:
+          type: string
+          format: byte
+    webauthn.CredentialAttestationResponse:
+      allOf:
+        - $ref: '#/components/schemas/webauthn.PublicKeyCredential'
+        - type: object
+          properties:
+            clientExtensionResults:
+              type: object
+              properties:
+                appidExclude:
+                  type: boolean
+            response:
+              allOf:
+                - $ref: '#/components/schemas/webauthn.AuthenticatorResponse'
+                - type: object
+                  properties:
+                    attestationObject:
+                      type: string
+                      format: byte
+    webauthn.CredentialAssertionResponse:
+      allOf:
+        - $ref: '#/components/schemas/webauthn.PublicKeyCredential'
+        - type: object
+          properties:
+            response:
+              allOf:
+                - $ref: '#/components/schemas/webauthn.AuthenticatorResponse'
+                - type: object
+                  required: [authenticatorData, clientDataJSON, signature]
+                  properties:
+                    authenticatorData:
+                      type: string
+                      format: byte
+                    clientDataJSON:
+                      type: string
+                      format: byte
+                    clientExtensionResults:
+                      type: object
+                      properties:
+                        appid:
+                          type: boolean
+                          example: false
+                    signature:
+                      type: string
+                      format: byte
+                    userHandle:
+                      type: string
+                      format: byte
+    webauthn.PublicKeyCredentialCreationOptions:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+          properties:
+            publicKey:
+              allOf:
+                - $ref: '#/components/schemas/webauthn.AttestationType'
+                - $ref: '#/components/schemas/webauthn.AuthenticatorSelectionCriteria'
+                - $ref: '#/components/schemas/webauthn.CredentialUserEntity'
+                - $ref: '#/components/schemas/webauthn.CredentialRPEntity'
+                - type: object
+                  required:
+                    - "challenge"
+                    - "pubKeyCredParams"
+                  properties:
+                    challenge:
+                      type: string
+                      format: byte
+                    pubKeyCredParams:
+                      type: array
+                      items:
+                        type: object
+                        required:
+                          - "alg"
+                          - "type"
+                        properties:
+                          alg:
+                            type: integer
+                          type:
+                            type: string
+                            example: public-key
+                            enum:
+                              - "public-key"
+                    timeout:
+                      type: integer
+                      example: 60000
+                    excludeCredentials:
+                      type: array
+                      items:
+                        allOf:
+                          - $ref: '#/components/schemas/webauthn.CredentialDescriptor'
+                    extensions:
+                      type: object
+                      properties:
+                        appidExclude:
+                          type: string
+                          example: https://auth.example.com
+    webauthn.PublicKeyCredentialRequestOptions:
+      type: object
+      properties:
+        status:
+          type: string
+          example: OK
+        data:
+          type: object
+          properties:
+            publicKey:
+              allOf:
+                - $ref: '#/components/schemas/webauthn.UserVerification'
+                - type: object
+                  required:
+                    - "challenge"
+                  properties:
+                    challenge:
+                      type: string
+                    timeout:
+                      type: integer
+                      example: 60000
+                    rpId:
+                      type: string
+                      example: auth.example.com
+                    allowCredentials:
+                      type: array
+                      items:
+                        allOf:
+                          - $ref: '#/components/schemas/webauthn.CredentialDescriptor'
+                    extensions:
+                      type: object
+                      properties:
+                        appid:
+                          type: string
+                          example: https://auth.example.com
+    webauthn.Transports:
+      type: object
+      properties:
+        transports:
+          type: array
+          items:
+            type: string
+            example:
+              - "usb"
+              - "nfc"
+            enum:
+              - "usb"
+              - "nfc"
+              - "ble"
+              - "internal"
+    webauthn.UserVerification:
+      type: object
+      properties:
+        userVerification:
+          type: string
+          example: preferred
+          enum:
+            - "required"
+            - "preferred"
+            - "discouraged"
+    webauthn.AttestationType:
+      type: object
+      properties:
+        attestation:
+          type: string
+          example: direct
+          enum:
+            - "none"
+            - "indirect"
+            - "direct"
+    webauthn.AuthenticatorSelectionCriteria:
+      type: object
+      properties:
+        authenticatorSelection:
+          type: object
+          properties:
+            authenticatorAttachment:
+              type: string
+              example: cross-platform
+              enum:
+                - "platform"
+                - "cross-platform"
+            residentKey:
+              type: string
+              example: discouraged
+              enum:
+                - "discouraged"
+                - "preferred"
+                - "required"
+            requireResidentKey:
+              type: boolean
+    webauthn.CredentialDescriptor:
+      allOf:
+        - $ref: '#/components/schemas/webauthn.Transports'
+        - type: object
+          required:
+            - "id"
+            - "type"
+          properties:
+            id:
+              type: string
+              format: byte
+            type:
+              type: string
+              example: public-key
+              enum:
+                - "public-key"
+    webauthn.CredentialEntity:
+      type: object
+      required:
+        - "id"
+        - "name"
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        icon:
+          type: string
+    webauthn.CredentialRPEntity:
+      type: object
+      required:
+        - "rp"
+      properties:
+        rp:
+          allOf:
+            - $ref: '#/components/schemas/webauthn.CredentialEntity'
+    webauthn.CredentialUserEntity:
+      type: object
+      required:
+        - "user"
+      properties:
+        user:
+          allOf:
+            - $ref: '#/components/schemas/webauthn.CredentialEntity'
+            - type: object
+              required:
+                - "displayName"
+              properties:
+                displayName:
+                  type: string
+    webauthn.AuthenticationExtensionsClientOutputs:
+      type: object
+      properties:
+        clientExtensionResults:
+          type: object
+          properties:
+            appid:
+              type: boolean
+              example: true
+            appidExclude:
+              type: boolean
+              example: false
+            uvm:
+              type: array
+              items:
+                type: string
+                format: byte
+            credProps:
+              type: object
+              properties:
+                rk:
+                  type: boolean
+                  example: false
+            largeBlob:
+              type: object
+              properties:
+                supported:
+                  type: boolean
+                  example: false
+                blob:
+                  type: string
+                written:
+                  type: boolean
+                  example: false
+  securitySchemes:
+    authelia_auth:
+      type: apiKey
+      name: "{{.Session}}"
+      in: cookie
+...
