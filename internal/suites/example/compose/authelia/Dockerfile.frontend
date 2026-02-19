@@ -1,0 +1,12 @@
+FROM node:16-alpine
+
+ARG USER_ID
+ARG GROUP_ID
+
+RUN deluser node && \
+    addgroup --gid ${GROUP_ID} dev && \
+    adduser --uid ${USER_ID} -G dev -D dev
+
+USER dev
+
+EXPOSE 3000

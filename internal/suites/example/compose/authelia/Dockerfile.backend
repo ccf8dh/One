@@ -1,0 +1,18 @@
+FROM golang:1.16-alpine
+
+ARG USER_ID
+ARG GROUP_ID
+
+RUN addgroup --gid ${GROUP_ID} dev && \
+    adduser --uid ${USER_ID} -G dev -D dev && \
+    apk --no-cache add git
+
+RUN mkdir -p /config && chown dev:dev /config
+
+USER dev
+
+ENV PATH="/app:${PATH}"
+
+VOLUME /config
+
+EXPOSE 9091

@@ -1,0 +1,57 @@
+# ========================================
+# ===== Build image for the frontend =====
+# ========================================
+FROM node:16-alpine AS builder-frontend
+
+WORKDIR /node/src/app
+
+COPY web ./
+
+# Install the dependencies and build
+RUN yarn install --frozen-lockfile && INLINE_RUNTIME_CHUNK=false yarn coverage
+
+# =======================================
+# ===== Build image for the backend =====
+# =======================================
+FROM golang:1.16.5-alpine AS builder-backend
+
+WORKDIR /go/src/app
+
+COPY go.mod go.sum ./
+
+RUN \
+echo ">> Downloading go modules..." && \
+go mod download
+
+COPY / ./
+
+# Prepare static files to be embedded in Go binary
+COPY --from=builder-frontend /node/src/internal/server/public_html internal/server/public_html
+
+ARG LDFLAGS_EXTRA
+RUN \
+mv api internal/server/public_html/api && \
+cd cmd/authelia && \
+echo ">> Starting go build (coverage via go test)..." && \
+CGO_ENABLED=0 go test -c --tags coverage -covermode=atomic \
+-ldflags "${LDFLAGS_EXTRA}" -o authelia -coverpkg github.com/authelia/authelia/...
+
+# ===================================
+# ===== Authelia official image =====
+# ===================================
+FROM alpine:3.14.0
+
+RUN apk --no-cache add ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=builder-backend /go/src/app/cmd/authelia/authelia /go/src/app/LICENSE /go/src/app/healthcheck.sh ./
+
+EXPOSE 9091
+
+VOLUME /config
+
+ENV PATH="/app:${PATH}"
+
+CMD ["authelia", "-test.coverprofile=/authelia/coverage.txt", "COVERAGE", "--config", "/config/configuration.yml"]
+HEALTHCHECK --interval=30s --timeout=3s CMD /app/healthcheck.sh
